@@ -2,12 +2,14 @@ const https = require("https");
 
 exports.handler = async (event) => {
   const endpoint = (event.queryStringParameters || {}).endpoint || "fixtures";
-  const key = process.env.API_FOOTBALL_KEY || "";
+  const key = process.env.FOOTBALL_DATA_KEY || "";
 
+  // football-data.org endpoints for World Cup 2026
+  // Competition code WC, season 2026
   const paths = {
-    fixtures:   "/v3/fixtures?league=1&season=2026",
-    standings:  "/v3/standings?league=1&season=2026",
-    topscorers: "/v3/players/topscorers?league=1&season=2026",
+    fixtures:   "/v4/competitions/WC/matches?season=2026",
+    standings:  "/v4/competitions/WC/standings?season=2026",
+    topscorers: "/v4/competitions/WC/scorers?season=2026",
   };
 
   const apiPath = paths[endpoint] || paths.fixtures;
@@ -15,10 +17,10 @@ exports.handler = async (event) => {
   const body = await new Promise((resolve, reject) => {
     const req = https.request(
       {
-        hostname: "v3.football.api-sports.io",
+        hostname: "api.football-data.org",
         path: apiPath,
         method: "GET",
-        headers: { "x-apisports-key": key },
+        headers: { "X-Auth-Token": key },
       },
       (res) => {
         let d = "";
