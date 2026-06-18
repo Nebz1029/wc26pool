@@ -1220,10 +1220,48 @@ let allScorers = [];
 // ══════════════════════════════════════════════
 //  API FETCH
 // ══════════════════════════════════════════════
-async function apiFetch(endpoint) {
-  const res = await fetch(`/.netlify/functions/scores?endpoint=${endpoint}`);
+const FREE_API = "https://worldcup26.ir/get";
+
+async function fetchGames() {
+  const res = await fetch(`${FREE_API}/games`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+function normalizeMatch(m) {
+  const status = m.status || "NS";
+  const homeGoals = m.home_score ?? m.score?.home ?? null;
+  const awayGoals = m.away_score ?? m.score?.away ?? null;
+  return {
+    fixture: {
+      date: m.datetime || m.date || m.kickoff,
+      status: { short: normalizeStatus(status), elapsed: m.minute || m.elapsed },
+    },
+    teams: {
+      home: { name: m.home_team || m.team1, id: m.home_team_id },
+      away: { name: m.away_team || m.team2, id: m.away_team_id },
+    },
+    goals: { home: homeGoals, away: awayGoals },
+    league: { round: m.round || m.stage || m.group || "" },
+    events: (m.events || m.goals || []).map(e => ({
+      type: e.type || "Goal",
+      detail: e.detail || "Regular Goal",
+      time: { elapsed: e.minute || e.time },
+      player: { name: e.player || e.player_name || "" },
+      team: { name: e.team || e.team_name || "" },
+    })),
+    statistics: [],
+  };
+}
+
+function normalizeStatus(s) {
+  if (!s) return "NS";
+  const u = s.toUpperCase();
+  if (u === "FINISHED" || u === "FT" || u === "COMPLETED") return "FT";
+  if (u === "LIVE" || u === "IN_PLAY" || u === "1H" || u === "2H") return "1H";
+  if (u === "HT" || u === "HALFTIME") return "HT";
+  if (u === "SCHEDULED" || u === "NS" || u === "UPCOMING") return "NS";
+  return s;
 }
 
 // ══════════════════════════════════════════════
@@ -1640,8 +1678,8 @@ let liveGamesCount = 0;
 
 async function loadScores() {
   try {
-    const data = await apiFetch("fixtures");
-    allFixtures = data.response || [];
+const raw = await fetchGames();
+allFixtures = (Array.isArray(raw) ? raw : raw.matches || raw.games || []).map(normalizeMatch);
     liveGamesCount = allFixtures.filter(f => ["1H","HT","2H","ET","P"].includes(f.fixture?.status?.short)).length;
     updateLiveStatus();
     renderScores(allFixtures);
