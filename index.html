@@ -1220,48 +1220,51 @@ let allScorers = [];
 // ══════════════════════════════════════════════
 //  API FETCH
 // ══════════════════════════════════════════════
-const FREE_API = "https://worldcup26.ir/get";
+const DATA_URL = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json";
 
 async function fetchGames() {
-  const res = await fetch(`${FREE_API}/games`);
+  const res = await fetch(DATA_URL);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
 function normalizeMatch(m) {
-  const status = m.status || "NS";
-  const homeGoals = m.home_score ?? m.score?.home ?? null;
-  const awayGoals = m.away_score ?? m.score?.away ?? null;
+  const hasScore = m.score && (m.score.ft || m.score.et || m.score.p);
+  const ft = m.score?.ft || m.score?.et || m.score?.p || null;
+  const homeGoals = ft ? ft[0] : null;
+  const awayGoals = ft ? ft[1] : null;
+  let statusShort = "NS";
+  if (hasScore) statusShort = "FT";
+  const dateStr = m.date || "";
+  const timeStr = m.time || "00:00";
+  const isoStr = dateStr ? `${dateStr}T${timeStr}:00` : null;
+  const events = [];
+  (m.goals1 || []).forEach(g => events.push({
+    type: "Goal", detail: "Regular Goal",
+    time: { elapsed: parseInt(g.minute) || 0 },
+    player: { name: g.name || "" },
+    team: { name: m.team1 || "" },
+  }));
+  (m.goals2 || []).forEach(g => events.push({
+    type: "Goal", detail: "Regular Goal",
+    time: { elapsed: parseInt(g.minute) || 0 },
+    player: { name: g.name || "" },
+    team: { name: m.team2 || "" },
+  }));
   return {
     fixture: {
-      date: m.datetime || m.date || m.kickoff,
-      status: { short: normalizeStatus(status), elapsed: m.minute || m.elapsed },
+      date: isoStr,
+      status: { short: statusShort, elapsed: null },
     },
     teams: {
-      home: { name: m.home_team || m.team1, id: m.home_team_id },
-      away: { name: m.away_team || m.team2, id: m.away_team_id },
+      home: { name: m.team1, id: m.team1 },
+      away: { name: m.team2, id: m.team2 },
     },
     goals: { home: homeGoals, away: awayGoals },
-    league: { round: m.round || m.stage || m.group || "" },
-    events: (m.events || m.goals || []).map(e => ({
-      type: e.type || "Goal",
-      detail: e.detail || "Regular Goal",
-      time: { elapsed: e.minute || e.time },
-      player: { name: e.player || e.player_name || "" },
-      team: { name: e.team || e.team_name || "" },
-    })),
+    league: { round: m.round || m.group || "" },
+    events,
     statistics: [],
   };
-}
-
-function normalizeStatus(s) {
-  if (!s) return "NS";
-  const u = s.toUpperCase();
-  if (u === "FINISHED" || u === "FT" || u === "COMPLETED") return "FT";
-  if (u === "LIVE" || u === "IN_PLAY" || u === "1H" || u === "2H") return "1H";
-  if (u === "HT" || u === "HALFTIME") return "HT";
-  if (u === "SCHEDULED" || u === "NS" || u === "UPCOMING") return "NS";
-  return s;
 }
 
 // ══════════════════════════════════════════════
